@@ -71,7 +71,6 @@ void matU8ToBlobDiv(const cv::Mat& orig_image, const InferenceEngine::Blob::Ptr&
                 }
             }
         }
-        slog::info << "255" << slog::endl;
     } else {
         throw std::runtime_error("Unsupported number of channels");
     }
@@ -150,7 +149,7 @@ void ModelYolo5::prepareInputsOutputs(InferenceEngine::CNNNetwork& cnnNetwork) {
 
                 // throw std::runtime_error("here");
 
-                RegionYolov4 r;
+                RegionYolov5 r;
                 r.num = 3;
                 r.classes = 80;
                 r.coords = 4;
@@ -158,23 +157,29 @@ void ModelYolo5::prepareInputsOutputs(InferenceEngine::CNNNetwork& cnnNetwork) {
                 // r.sides[1] = op->get_shape().at(0);
 
 
-                std::vector<float> anchors = {116,90, 156,198, 373,326,
-                                              30,61, 62,45, 59,119,
-                                              10,13, 16,30, 33,23,
-                                              };
-
-                //yolov5
-                // std::vector<float> anchors = {10,13, 16,30, 33,23,
+                // std::vector<float> anchors = {116,90, 156,198, 373,326,
                 //                               30,61, 62,45, 59,119,
-                //                               116,90, 156,198, 373,326};
+                //                               10,13, 16,30, 33,23,
+                //                               };
+
+                // yolov5
+                std::vector<float> anchors = {10,13, 16,30, 33,23,
+                                              30,61, 62,45, 59,119,
+                                              116,90, 156,198, 373,326};
+                std::vector<int> netGrids = {80, 40, 20};
 
                 // std::vector<float> anchors = {116,90, 156,198, 373,326,
                 //                               10,13, 16,30, 33,23,
                 //                               30,61, 62,45, 59,119,
                 //                               };
+                // std::vector<int> netGrids = {20, 40, 80};
+
+                // anchors:
+                // - [10,13, 16,30, 33,23]  # P3/8
+                // - [30,61, 62,45, 59,119]  # P4/16
+                // - [116,90, 156,198, 373,326]  # P5/32
+
                 std::vector<std::vector<int> > masks = {{0, 1, 2}, {3, 4, 5},{6, 7, 8},};
-                // std::vector<int> netGrids = {80, 40, 20};
-                std::vector<int> netGrids = {20, 40, 80};
                 r.netGrid = netGrids[maskCount];
                 
                 std::vector<int> masked_anchors;
@@ -184,7 +189,7 @@ void ModelYolo5::prepareInputsOutputs(InferenceEngine::CNNNetwork& cnnNetwork) {
                 }
                 r.anchors = masked_anchors;
                 maskCount++;
-                regions.emplace(outputLayer->first, RegionYolov4(r));
+                regions.emplace(outputLayer->first, RegionYolov5(r));
             }
         }
         slog::info << "finished add regions " << slog::endl;
@@ -242,7 +247,9 @@ std::shared_ptr<InternalModelData> ModelYolo5::preprocess(const InputData& input
     /* Resize and copy data from the image to the input blob */
     InferenceEngine::Blob::Ptr frameBlob = request->GetBlob(inputsNames[0]);
     // matU8ToBlob<uint8_t>(img, frameBlob);
+
     matU8ToBlobDiv<float>(resize_img, frameBlob);
+
     // size_t img_size = 640 * 640;
     // if (inputsNames.size() >= 1) {
     //     auto blob = request->GetBlob(inputsNames[0]);
@@ -273,6 +280,7 @@ std::shared_ptr<InternalModelData> ModelYolo5::preprocess(const InputData& input
     return std::make_shared<InternalImageModelData>(img.cols, img.rows);
 }
 
+
 std::unique_ptr<ResultBase> ModelYolo5::postprocess(InferenceResult & infResult) {
     DetectionResult* result = new DetectionResult(infResult.frameId, infResult.metaData);
 
@@ -292,18 +300,18 @@ std::unique_ptr<ResultBase> ModelYolo5::postprocess(InferenceResult & infResult)
     for (auto& output : infResult.outputsData) {
         this->parseYOLOV5Output(output.first, output.second, netInputHeight, netInputWidth,
             internalData.inputImgHeight, internalData.inputImgWidth, origin_rect, origin_rect_cof, classId);
-        slog::info << "layer name: " << output.first << " origin_rect size " << origin_rect.size() << slog::endl;
+        // slog::info << "layer name: " << output.first << " origin_rect size " << origin_rect.size() << slog::endl;
     }
 
-    slog::info << "origin_rect size " << origin_rect.size() << slog::endl;
+    // slog::info << "origin_rect size " << origin_rect.size() << slog::endl;
     std::vector<int> final_id;
     // dnn::NMSBoxes(origin_rect,origin_rect_cof,_cof_threshold,_nms_area_threshold,final_id);
-    slog::info << "confidenceThreshold " << confidenceThreshold << slog::endl;
+    // slog::info << "confidenceThreshold " << confidenceThreshold << slog::endl;
     // for(size_t i = 0; i < origin_rect.size(); ++i) {
     //     std::cout << "o_rect-" << i << "\t" << origin_rect[i] << "\tprod: " << origin_rect_cof[i] << std::endl;
     // }
     cv::dnn::NMSBoxes(origin_rect, origin_rect_cof, confidenceThreshold, 0.5, final_id);
-    slog::info << "final_id size " << final_id.size() << slog::endl;
+    // slog::info << "final_id size " << final_id.size() << slog::endl;
     // throw std::runtime_error("s");
 
 
@@ -325,11 +333,11 @@ std::unique_ptr<ResultBase> ModelYolo5::postprocess(InferenceResult & infResult)
 
         obj.confidence = origin_rect_cof[final_id[i]];
         obj.labelID = classId[final_id[i]];
-        obj.label = getLabelName(obj.labelID);
+        obj.label = getLabelName(obj.labelID - 5);
         objects.push_back(obj);
     }
-    slog::info << "objects size " << objects.size() << slog::endl;
-    slog::info << slog::endl << slog::endl;
+    // slog::info << "objects size " << objects.size() << slog::endl;
+    // slog::info << slog::endl << slog::endl;
     if (useAdvancedPostprocessing) {
         // Advanced postprocessing
         // Checking IOU threshold conformance
@@ -353,8 +361,7 @@ std::unique_ptr<ResultBase> ModelYolo5::postprocess(InferenceResult & infResult)
                 result->objects.push_back(obj1);
             }
         }
-        slog::info << "result->objects size " << result->objects.size() << slog::endl;
-        slog::info << "s1" << slog::endl;
+        // slog::info << "result->objects size " << result->objects.size() << slog::endl;
     } else {
         // Classic postprocessing
         std::sort(objects.begin(), objects.end(), [](const DetectedObject& x, const DetectedObject& y) { return x.confidence > y.confidence; });
@@ -366,9 +373,7 @@ std::unique_ptr<ResultBase> ModelYolo5::postprocess(InferenceResult & infResult)
                     objects[j].confidence = 0;
             result->objects.push_back(objects[i]);
         }
-        slog::info << "s2" << slog::endl;
     }
-    // throw std::runtime_error("a");
 
     return std::unique_ptr<ResultBase>(result);
 }
@@ -380,7 +385,6 @@ void ModelYolo5::parseYOLOV5Output(const std::string& output_name,
     std::vector<cv::Rect> &origin_rect,
 	std::vector<float> &origin_rect_cof,
     std::vector<int>& classId) {
-
 
     const int out_blob_h = static_cast<int>(blob->getTensorDesc().getDims()[2]);
     const int out_blob_w = static_cast<int>(blob->getTensorDesc().getDims()[3]);
@@ -406,10 +410,10 @@ void ModelYolo5::parseYOLOV5Output(const std::string& output_name,
     // std::cout << "output_blob element_size：" << blob->element_size() << std::endl;
     // std::cout << "region.netGrid ：" << region.netGrid << std::endl;
 
-    // --------------------------- Parsing YOLOV4 Region output -------------------------------------
+    // --------------------------- Parsing YOLOV5 Region output -------------------------------------
 
     std::vector<int> anchors = region.anchors;
-    std::cout << "anchors ：" << anchors[0] << " " << anchors[1] << " " << anchors[2] << " " << anchors[3] << " " << anchors[4] << " " << anchors[5] << std::endl;
+    // std::cout << "anchors ：" << anchors[0] << " " << anchors[1] << " " << anchors[2] << " " << anchors[3] << " " << anchors[4] << " " << anchors[5] << std::endl;
 
     // const float* output_blob = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
     LockedMemory<const void> blobMapped = as<MemoryBlob>(blob)->rmap();
@@ -418,25 +422,30 @@ void ModelYolo5::parseYOLOV5Output(const std::string& output_name,
     int item_size = 85;
     size_t anchor_n = 3;
     int net_grid = region.netGrid;
+                
+    // std::cout << "net_grid " << net_grid << std::endl;
+    int count = 0;
+    // if (net_grid != 40) return;
+    for(int i = 0; i < net_grid; ++i) {
+        for(int j = 0; j < net_grid; ++j) {
+            for(size_t n = 0; n < anchor_n; ++n) {
 
-    for(size_t n = 0; n < anchor_n; ++n) {
-        for(int i = 0; i < net_grid; ++i) {
-            for(int j = 0; j < net_grid; ++j) {
                 double box_prob = output_blob[n * net_grid * net_grid * item_size + i * net_grid * item_size + j * item_size + 4];
                 // std::cout << "box_prob : " << box_prob << std::endl;
+
                 box_prob = sigmoid(box_prob);
-                // if (box_prob>0)  std::cout << "box_prob1 : " << box_prob << std::endl;
                 //框置信度不满足则整体置信度不满足
                 if(box_prob < confidenceThreshold)
                     continue;
                 // std::cout << "box_prob: " << box_prob << " confidenceThreshold: " << confidenceThreshold << std::endl;
+
                 
                 //注意此处输出为中心点坐标,需要转化为角点坐标
                 double x = output_blob[n * net_grid * net_grid * item_size + i * net_grid * item_size + j * item_size + 0];
                 double y = output_blob[n * net_grid * net_grid * item_size + i * net_grid * item_size + j * item_size + 1];
                 double w = output_blob[n * net_grid * net_grid * item_size + i * net_grid * item_size + j * item_size + 2];
                 double h = output_blob[n * net_grid * net_grid * item_size + i * net_grid * item_size + j * item_size + 3];
-            // std::cout << "here1" << std::endl;
+                
                 double max_prob = 0;
                 int labelMaxID = 0;
                 for(int t = 5; t < 85; ++t){
@@ -445,82 +454,38 @@ void ModelYolo5::parseYOLOV5Output(const std::string& output_name,
                     if(tp > max_prob){
                         max_prob = tp;
                         labelMaxID = t;
-                    
-
                     }
-                    // std::cout << "here"  << t << std::endl;
                 }
-                // std::cout << "here2" << std::endl;
+                // std::cout << "max_prob: " << max_prob << std::endl;
+
+
                 float cof = box_prob * max_prob;                
-                //对于边框置信度小于阈值的边框,不关心其他数值,不进行计算减少计算量
+                // float cof = box_prob;                
+                // //对于边框置信度小于阈值的边框,不关心其他数值,不进行计算减少计算量
                 if(cof < confidenceThreshold)
                     continue;
                 // std::cout << "box_prob: " << box_prob << " confidenceThreshold: " << confidenceThreshold << std::endl;
                 // std::cout << "cof: " << cof << " labelMaxID: " << labelMaxID << std::endl;
-                
-//  std::cout << "here3" << std::endl;
+
+
                 x = (sigmoid(x) * 2 - 0.5 + j) * 640.0f / net_grid;
                 y = (sigmoid(y) * 2 - 0.5 + i) * 640.0f / net_grid;
                 w = pow(sigmoid(w) * 2, 2) * anchors[n * 2];
                 h = pow(sigmoid(h) * 2, 2) * anchors[n * 2 + 1];
-// std::cout << "here4" << std::endl;
+
                 double r_x = x - w / 2;
                 double r_y = y - h / 2;
                 cv::Rect rect = cv::Rect(round(r_x),round(r_y),round(w),round(h));
                 origin_rect.push_back(rect);
                 origin_rect_cof.push_back(cof);
                 classId.push_back(labelMaxID);
-                // std::cout << "pared finished" << std::endl;
+                count++;
             }
         } 
     }
 
-    slog::info << "o_rect size " << origin_rect.size() << slog::endl;
-    slog::info << "o_rect_cof size " << origin_rect_cof.size() << slog::endl;
-
-
-
-    // obj.confidence = prob;
-    // obj.labelID = j;
-    // obj.label = getLabelName(obj.labelID);
-    // objects.push_back(obj);
-
-
-        // for (int n = 0; n < region.num; ++n) {
-        //     //--- Getting region data from blob
-        //     int obj_index = calculateEntryIndex(side, region.coords, region.classes, n * side * side + i, region.coords);
-        //     int box_index = calculateEntryIndex(side, region.coords, region.classes, n * side * side + i, 0);
-        //     float scale = sigmoid(output_blob[obj_index]);
-
-        //     //--- Preliminary check for confidence threshold conformance
-        //     if (scale >= confidenceThreshold){
-        //         //--- Calculating scaled region's coordinates
-        //         double x = (col + sigmoid(output_blob[box_index + 0 * side_square])) / side * original_im_w;
-        //         double y = (row + sigmoid(output_blob[box_index + 1 * side_square])) / side * original_im_h;
-        //         double height = std::exp(output_blob[box_index + 3 * side_square]) * region.anchors[2 * n + 1] * original_im_h / resized_im_h;
-        //         double width = std::exp(output_blob[box_index + 2 * side_square]) * region.anchors[2 * n] * original_im_w / resized_im_w;
-
-        //         DetectedObject obj;
-        //         obj.x = (float)(x-width/2);
-        //         obj.y = (float)(y-height/2);
-        //         obj.width = (float)(width);
-        //         obj.height = (float)(height);
-
-        //         for (int j = 0; j < region.classes; ++j) {
-        //             int class_index = calculateEntryIndex(side, region.coords, region.classes, n * side_square + i, region.coords + 1 + j);
-        //             float prob = scale * sigmoid(output_blob[class_index]);
-
-        //             //--- Checking confidence threshold conformance and adding region to the list
-        //             if (prob >= confidenceThreshold) {
-        //                 obj.confidence = prob;
-        //                 obj.labelID = j;
-        //                 obj.label = getLabelName(obj.labelID);
-        //                 objects.push_back(obj);
-        //             }
-        //         }
-        //     }
-        // }
-    // }
+    // slog::info << "o_rect size " << origin_rect.size() << slog::endl;
+    // slog::info << "o_rect_cof size " << origin_rect_cof.size() << slog::endl;
 }
 
 

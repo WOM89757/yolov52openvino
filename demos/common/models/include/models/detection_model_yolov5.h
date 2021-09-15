@@ -21,7 +21,7 @@
 class ModelYolo5 : public DetectionModel {
 protected:
 
-    class RegionYolov4 {
+    class RegionYolov5 {
     public:
         int num = 0;
         int classes = 0;
@@ -29,7 +29,7 @@ protected:
         int netGrid;
         int sides[2];
         std::vector<int> anchors;
-        friend std::ostream &operator<< (std::ostream &out, const RegionYolov4 &r) {
+        friend std::ostream &operator<< (std::ostream &out, const RegionYolov5 &r) {
             out << r.num << " " << r.classes << " " << r.coords << " " << r.sides[0] << " " << r.anchors.size();
             return out;
         }
@@ -64,10 +64,10 @@ protected:
 
     static int calculateEntryIndex(int side, int lcoords, int lclasses, int location, int entry);
     static double intersectionOverUnion(const DetectedObject& o1, const DetectedObject& o2);
-    static cv::Rect detect2origin(const cv::Rect& det_rect, float rate_to, int top, int left);
+    static cv::Rect detect2origin(const  cv::Rect& det_rect, float rate_to, int top, int left);
     cv::Mat letterBox(cv::Mat src);
 
-    std::map<std::string, RegionYolov4> regions;
+    std::map<std::string, RegionYolov5> regions;
     double boxIOUThreshold;
     bool useAdvancedPostprocessing;
     float ratio;
