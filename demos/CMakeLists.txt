@@ -133,7 +133,8 @@ find_package(ngraph REQUIRED)
 
 add_subdirectory(thirdparty/gflags)
 add_subdirectory(common)
-add_subdirectory(src)
+add_subdirectory(object_detection_demo)
+add_subdirectory(smart_classroom_demo)
 # add_subdirectory(multi_channel_common/cpp)
 
 # collect all samples subdirectories

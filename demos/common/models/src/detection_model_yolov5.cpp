@@ -151,7 +151,7 @@ void ModelYolo5::prepareInputsOutputs(InferenceEngine::CNNNetwork& cnnNetwork) {
 
                 RegionYolov5 r;
                 r.num = 3;
-                r.classes = 80;
+                r.classes = 1;
                 r.coords = 4;
                 // r.sides[0] = op->get_shape().at(0);
                 // r.sides[1] = op->get_shape().at(0);
@@ -359,6 +359,8 @@ std::unique_ptr<ResultBase> ModelYolo5::postprocess(InferenceResult & infResult)
             }
             if (isGoodResult) {
                 result->objects.push_back(obj1);
+                slog::info << "isGoodResult labelId: " << obj1.labelID << "   condifence: " << obj1.confidence << slog::endl;
+
             }
         }
         // slog::info << "result->objects size " << result->objects.size() << slog::endl;
@@ -419,7 +421,7 @@ void ModelYolo5::parseYOLOV5Output(const std::string& output_name,
     LockedMemory<const void> blobMapped = as<MemoryBlob>(blob)->rmap();
     const float *output_blob = blobMapped.as<float *>();
 
-    int item_size = 85;
+    int item_size = 6;
     size_t anchor_n = 3;
     int net_grid = region.netGrid;
                 
@@ -448,7 +450,7 @@ void ModelYolo5::parseYOLOV5Output(const std::string& output_name,
                 
                 double max_prob = 0;
                 int labelMaxID = 0;
-                for(int t = 5; t < 85; ++t){
+                for(int t = 5; t < item_size; ++t){
                     double tp= output_blob[n * net_grid * net_grid * item_size + i * net_grid * item_size + j * item_size + t];
                     tp = sigmoid(tp);
                     if(tp > max_prob){
